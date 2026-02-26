@@ -58,7 +58,6 @@ HOST_PORTS="${HOST_PORTS%,}"
   sed -e "s|<SERVER_GROUP>|${HOST_PORTS}|g" -e "s|<GROUP_UUID>|${UUID}|g" initfile_84_template.cnf > initfile_84.cnf
 elif [[ $# -eq 1 ]]; then
   sed -e '/^[[:space:]]*loose-group/d' -e '/^[[:space:]]*#/d' initfile_84_template.cnf > initfile_84.cnf
-  #sed '/^[[:space:]]*loose-group/d' initfile_84_template.cnf > initfile_84.cnf
 fi
 
 # Create trust between local deploy server & remote server
@@ -108,7 +107,8 @@ for arg in "$@"; do
 set -e
 cd ${REMOTE_DIR}
 chmod +x $INSTALL_DB_SCRIPT
-INST_NAME=$INST_NAME ./$INSTALL_DB_SCRIPT
+AUTO_INSTALL_FROM_REMOTE=1 ./$INSTALL_DB_SCRIPT "$INST_NAME"
+
 EOF
     echo -e "[SUCCESS] Installation completed on ${HOST} with instance ${INST_NAME}\n\n"
   }
@@ -139,5 +139,5 @@ echo "================================================================"
 
 } 2>&1 | tee -a "${LOGFILE}"
 
-echo -e "Local log file ： ${LOGFILE}"
+echo -e "Local log file ï¼š ${LOGFILE}"
 
