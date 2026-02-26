@@ -57,8 +57,9 @@ debug() {
 
 
 VarCheck() {
-   echo -e "\nPre-check OS environment and input value..."
+   echo -e "\nPre-check OS environment..."
    #--Check LOCK_FILE exist or not--#
+   echo -e "#--- Check LOCK_FILE exist or not ---"
    [ -f "${LCKFILE}" ] && [ -s "${LCKFILE}" ] && [ -n "`awk -v mh=${MYSQL_HOME[$SWVER]} '($2==mh){print}' ${LCKFILE}`" ] && {
       echo -e "\n[Error] - [$(hostname)]MySQL binary file home (${MYSQL_HOME[$SWVER]}) are installing by other session."
       echo -e "[$(hostname)]Please wait for other software install session complete and re-run again.\n"
@@ -66,13 +67,16 @@ VarCheck() {
    }
 
    #--Check INSTANCE_NAME input value--#
+   echo -e "#--- Check INSTANCE_NAME input value ---"
    [ -n "`echo ${INST_NAME}|egrep "[^[:alnum:]]"`" ] && { echo -e "\n[Error] - Instance Name include illegle character\n"; exit 1; }
 
    #--Check source file path--#
+   echo -e "#--- Check source file path ---""
    ( [[ -z ${SOFT_LOC[$SWVER]%/*} ]] || [[ ${SOFT_LOC[$SWVER]} != *"/"* ]] ) && \
       { echo -e "\n[Error] - [$(hostname)]Source filename need include full path and don't put the file in /.\n"; exit 1; }
 
    #--Check UNZIPED source file exist or not--#
+   echo -e "#--- Check UNZIPED source file exist or not ---"
    [ `find "${SOFT_LOC[$SWVER]%/*}/mysql${SWVER}" -type f 2>/dev/null|wc -l` -gt 0 ] && {
       [[ $DELSW =~ ^(y|n)$ ]] || {
          echo -e "\n[Warming] - [$(hostname)]Unzip destination location (${SOFT_LOC[$SWVER]%/*}/mysql${SWVER}) not empty"
@@ -84,14 +88,17 @@ VarCheck() {
    }
 
    #--Check MYSQL_HOME binary fiile exist or not--#
+   echo -e "#--- Check MYSQL_HOME binary fiile exist or not ---"
    [ `find ${MYSQL_HOME[$SWVER]} -type f 2>/dev/null|wc -l` -gt 0 ] && \
       { echo -e "\n[Error] - [$(hostname)]MySQL Binary file home (${MYSQL_HOME[$SWVER]}) not empty, please check.\n"; exit 1; }
 
    #--Check if files exist in ${DATA_LOC[$SWVER]}/data and select delete it or not--#
+   echo -e "#--- Check if files exist in ${DATA_LOC[$SWVER]}/data and select delete it or not ---#"
    [ `find ${DATA_LOC[$SWVER]}/data -type f 2>/dev/null|wc -l` -gt 0 ] && \
       { echo -e "\n[Error] - [$(hostname)]Data file location (${DATA_LOC[$SWVER]}/data) not empty, please check.\n"; exit 1; }
 
    #--Check OS TimeZone setting--#
+   echo -e "#--- Check OS TimeZone setting ---#"
    [ "${CURTZ}" != "${TIME_ZONE}" ] && {
       [[ "${CHGTZ}" =~ ^(y|n)$ ]] || {
          echo -e "\n[Warming] - [$(hostname)]Current TimeZone \"${CURTZ}\" setting incorrect"
@@ -101,7 +108,8 @@ VarCheck() {
          done
       }
    }
-   #--Checki if script is run directly with explicit instance name, treat as single-instance install and remove group replication settings from initfile_84.cnf.
+   #--Checki if script is run directly with explicit instance name, treat as single-instance install and remove group replication settings from initfile_84.cnf.--#
+   echo -e "#--- Check and replace cnf file ---#"
    if [ "$#" -eq 1 ] && [ "${AUTO_INSTALL_FROM_REMOTE:-0}" != "1" ]; then
       CONFIG_ROOT="/opt/software/mysql_installer"
       TARGET_CNF="${CONFIG_ROOT}/initfile_${SWVER}.cnf"
@@ -126,12 +134,13 @@ EnvPrepare() {
    echo -e "\n[$(hostname)]Set OS environment..."
    echo -e "=============================================="
    echo -e "#--- Install RPM package ---#"
-   rpm -i --quiet software/*.rpm
+   ls software/*.rpm
+   rpm -i --quiet --nosignature software/*.rpm
    
    echo -e "#--- Check and remove mariadb ---#"
    MARIADB_PKGS=$(rpm -qa | grep mariadb)
    [ -n "$MARIADB_PKGS" ] &&
-    { echo "[INFO]Found mariadb packages, removing..." && echo "$MARIADB_PKGS" | xargs yum remove -y; } || echo "[INFO]No mariadb packages installed."
+    { echo "[INFO]Found mariadb packages, removing..." && echo "$MARIADB_PKGS" | xargs yum remove -y; } 
 
    [ "${CHGTZ}" = "y" ] && {
       echo -e "#--- Change Server TimeZone ---#"
@@ -171,9 +180,16 @@ EnvPrepare() {
       && { useradd -r -g mysql -s /bin/false mysql; echo "${MYSQL_PW}"|passwd mysql --stdin &>/dev/null; } \
       || echo "[Info] - OS account MySQL already exist, skip create account and reset password"
 
+   echo -e "#--- Setting PATH variable ---#"
+   [ -z "$(grep '\.bash_alias' ~/.bash_profile)" ] && echo ". ~/.bash_alias" >>~/.bash_profile
+   cat > ~/.bash_alias <<EOF
+export PATH=${MYSQL_HOME[$SWVER]}/bin:$PATH
+EOF
+   . ~/.bash_profile
+   
    echo -e "#--- Disable public YUM server ---#"
    for F in `find /etc/yum.repos.d -name public-yum*.repo`; do mv -f $F $F.bak; done
-
+ 
    echo -e "#--- Check YUM server status ---#"
    yum clean all; yum repolist all;
    case "${OSVER}" in
@@ -192,15 +208,6 @@ EnvPrepare() {
 
    echo -e "#--- Install mandatory RPM package ---#"
    yum install bc vim-enhanced tar unzip net-tools perl sysstat -y -q
-
-   echo -e "#--- Setting PATH variable ---#"
-   [ -z "$(grep '\.bash_alias' ~/.bash_profile)" ] && echo ". ~/.bash_alias" >>~/.bash_profile
-   cat > ~/.bash_alias <<EOF
-export PATH=${MYSQL_HOME[$SWVER]}/bin:$PATH
-EOF
-   . ~/.bash_profile
-
-   echo -e "==================== done ===================="
 }
 
 UnzipSource() {
@@ -296,7 +303,7 @@ PostAction() {
    [ -z "$(grep '^\[MYSQL\]' /etc/my.cnf)" ] && echo '[MYSQL]' >>/etc/my.cnf
    [ -z "$(grep '^prompt=' /etc/my.cnf)" ] && echo 'prompt="(\u@\h) [\d]> "' >>/etc/my.cnf
 
-   echo -e "#--- Reset root passwrd and add OS authentication ---#"
+   echo -e "#--- Reset MySQL root passwrd and add OS authentication ---#"
    mysql --skip-password -uroot --force -t <<EOF
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_PW';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
@@ -306,15 +313,16 @@ ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket;
 FLUSH PRIVILEGES;
 EOF
 
+   echo -e "#--- Add dba and zbx_monitor db account and grant permission ---#"
 #Grant permission to dba and cluster user
-   mysql --skip-password -uroot --force -t <<EOF
+   mysql --skip-password --no-defaults -uroot --force -t <<EOF
 CREATE USER icadmin@'%' IDENTIFIED BY 'mysql_123';
 GRANT ALL PRIVILEGES ON *.* TO 'icadmin'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 CREATE USER 'dba'@'%' IDENTIFIED BY 'mysql_123';
 GRANT ALL PRIVILEGES ON *.* TO 'dba'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
-CREATE USER 'zbx_monitor'@'%' IDENTIFIED BY '123';
+CREATE USER 'zbx_monitor'@'%' IDENTIFIED BY 'mysql_123';
 GRANT REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW,SELECT ON *.* TO 'zbx_monitor'@'%';
 FLUSH PRIVILEGES;
 EOF
@@ -352,7 +360,6 @@ CleanUp() {
 # main()
 PreCheck
 #IntActIn
-#VarCheck
 VarCheck "$@"
 
 #--- create lock file ---#
