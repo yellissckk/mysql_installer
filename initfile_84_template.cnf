@@ -1,0 +1,40 @@
+[mysqld]
+basedir=<MYSQL_HOME>
+datadir=<DATA_LOC>/data
+log-error=<DATA_LOC>/data/<HOSTNAME>.err
+innodb_buffer_pool_size = 2G
+innodb_redo_log_capacity=512M
+#large_pages = ON
+max_connections = 5000
+slow_query_log = 1			
+slow_query_log_file=<DATA_LOC>/data/slow.log
+max_connect_errors=1000000
+lower_case_table_names=1
+
+server-id=<SERVERID>
+log_bin=<DATA_LOC>/binlog/binlog
+binlog_checksum=NONE
+binlog_format=row
+binlog_expire_logs_seconds = 604800 # 7 days
+relay_log=<DATA_LOC>/relaylog/relaylog
+
+gtid_mode = on
+enforce_gtid_consistency = on 
+
+log_slave_updates = on
+disabled_storage_engines = "MyISAM,BLACKHOLE,FEDERATED,ARCHIVE,MEMORY"
+
+plugin-dir = <MYSQL_HOME>/lib/plugin
+plugin-load = group_replication.so
+
+loose-group_replication_group_name="<GROUP_UUID>"
+loose-group_replication_start_on_boot=off
+loose-group_replication_local_address="<LOCALDBIP>:33061"
+loose-group_replication_group_seeds="<SERVER_GROUP>"
+loose-group_replication_bootstrap_group=off
+loose-group_replication_single_primary_mode=TRUE
+#loose-group_replication_ip_allowlist="10.99.31.*"
+
+#relay_log_info_repository=table #already remove from mysql8.4
+#master_info_repository=table #Removed in MySQL 8.3
+#transaction-write-set-extraction=XXHASH64  #Removed in MySQL 8.3
