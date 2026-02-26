@@ -8,6 +8,7 @@ set -euo pipefail
 INSTALL_DB_SCRIPT="mysql_auto_install_2.5.0604.sh"
 INSTALL_CLUSTER_SCRIPT=("innodb_cluster_setup.sh" "innodb_cluster_deploy.sh")
 INSTALL_ZABBIX_CONFG=("./zabbix/linux_discovery.sh" "./zabbix/userparameter_mysql.conf" "./zabbix/zabbix_agent2.conf" "./zabbix/userparameter_mysqlrouter.conf")
+CNF_TEMPLATE="initfile_84_template.cnf"
 CNF="initfile_84.cnf"
 MYSQL_ZIP="./software/V1047836-01_MySQL_EE_8.4.4_TAR_glibc_2.28.zip"
 MYSQL_RPM=("./software/mysql-router-commercial-8.4.6-1.1.el8.x86_64.rpm" "./software/mysql-shell-commercial-8.4.4-1.1.el8.x86_64.rpm" "./software/zabbix-agent2-7.0.19-release1.el8.x86_64.rpm")
@@ -35,7 +36,7 @@ LOGFILE="${LOG_DIR}/remote_install_`date '+%Y-%m-%d_%H-%M-%S'`.log"
 REMOTE_DIR="/opt/software/mysql_installer"
 
 # Check required files exist locally
-FILES_TO_CHECK=("$INSTALL_DB_SCRIPT" "$CNF" "$MYSQL_ZIP" "${INSTALL_ZABBIX_CONFG[@]}" "${MYSQL_RPM[@]}" "${INSTALL_CLUSTER_SCRIPT[@]}")
+FILES_TO_CHECK=("$INSTALL_DB_SCRIPT" "$CNF" "$CNF_TEMPLATE" "$MYSQL_ZIP" "${INSTALL_ZABBIX_CONFG[@]}" "${MYSQL_RPM[@]}" "${INSTALL_CLUSTER_SCRIPT[@]}")
 for f in "${FILES_TO_CHECK[@]}"; do
   if [[ ! -f "$f" ]]; then
     echo "[ERROR] Can't find file $f , please copy file into directory ./software"
@@ -43,7 +44,6 @@ for f in "${FILES_TO_CHECK[@]}"; do
   fi
 done
 
-# Writing log
 {
 # Replace replication_group_seeds / group_uuid on my.cnf if user want to install inno cluster
 if [[ $# -gt 1 ]]; then
@@ -55,9 +55,9 @@ for arg in "$@"; do
 done
 HOST_PORTS="${HOST_PORTS%,}"
   echo "All host:port list = ${HOST_PORTS}"
-  sed -e "s|<SERVER_GROUP>|${HOST_PORTS}|g" -e "s|<GROUP_UUID>|${UUID}|g" initfile_84_template.cnf > initfile_84.cnf
+  sed -e "s|<SERVER_GROUP>|${HOST_PORTS}|g" -e "s|<GROUP_UUID>|${UUID}|g" "${CNF_TEMPLATE}" > "${CNF}"
 elif [[ $# -eq 1 ]]; then
-  sed -e '/^[[:space:]]*loose-group/d' -e '/^[[:space:]]*#/d' initfile_84_template.cnf > initfile_84.cnf
+  sed -e '/^[[:space:]]*loose-group/d' -e '/^[[:space:]]*#/d' "${CNF_TEMPLATE}" > "${CNF}"
 fi
 
 # Create trust between local deploy server & remote server
