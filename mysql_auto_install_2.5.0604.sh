@@ -8,7 +8,7 @@
 MYSQL_HOME[84]="/opt/mysql84"	# Default MySQL binary home
 SOFT_LOC[84]="/opt/software/mysql_installer/software/V1047836-01_MySQL_EE_8.4.4_TAR_glibc_2.28.zip"	# 8.4 default zip file location
 UNZIPDIR[84]="mysql-commercial-8.4.4-linux-glibc2.28-x86_64"	# 8.4 tar file extracted default name
-DATA_LOC[84]="/mysqldata/${INST_NAME}"	# Default Instance location
+#DATA_LOC[84]="/mysqldata/${INST_NAME}"	# Default Instance location
 UNZIPSPACE[84]=950              # Unit MB, free space requirement for 8.4 UNZIP location
 MHOMESPACE[84]=1750             # Unit MB, free space requirement for 8.4 MYSQL_HOME location
 TIME_ZONE="America/La_Paz"      # Default timezone
@@ -20,7 +20,16 @@ CHGTZ="y"   				#Auto change timezone
 SWVER=84
 OSIP=$(dev=`ip r|awk '/default via/{print $5}'`;ip a|grep "inet "|awk '/'$dev'/&&!/secondary/&&!/127.0.0.1/{print substr($2,1,match($2,"/")-1)}')
 OSVER=`awk '{print $NF}' /etc/oracle-release`
-INST_NAME=MYINST${OSIP##*.}
+#INST_NAME=MYINST${OSIP##*.}
+if [ "$#" -gt 1 ]; then
+   echo -e "\nUsage: $0 [INSTANCE_NAME]\n"
+   exit 1
+fi
+
+DEFAULT_INST_NAME="MYINST${OSIP##*.}"
+INST_NAME="${1:-${INST_NAME:-${DEFAULT_INST_NAME}}}"
+DATA_LOC[84]="/mysqldata/${INST_NAME}"	# Default Instance location
+
 [ -f "/usr/bin/timedatectl" ] \
    && CURTZ=`timedatectl|awk '/Time zone:/{print $3}'` \
    || CURTZ=`awk -F= 'gsub("\"","",$2){print $2}' /etc/sysconfig/clock`
@@ -46,16 +55,6 @@ debug() {
    sleep 0.5;echo;read -n1 -s -r -p "Press any key to continue..."
 }
 
-IntActIn() {
-   echo -e "\nPlease input following necessary infomation by your own or using default value"
-   read -p "Please input MySQL Instance Name [${INST_NAME}]: " IN; INST_NAME=${IN:=${INST_NAME}}; DATA_LOC[$SWVER]="/mysqldata/${INST_NAME}"
-   read -p "Please input MySQL SOURCE_FILE.ZIP full name [${SOFT_LOC[$SWVER]}]: " SL; SOFT_LOC[$SWVER]=${SL:=${SOFT_LOC[$SWVER]}}
-   read -p "Please input MySQL binary file install directory [${MYSQL_HOME[$SWVER]}]: " MH; MYSQL_HOME[$SWVER]=${MH:=${MYSQL_HOME[$SWVER]}}
-   read -p "Please input MySQL data file directory [${DATA_LOC[$SWVER]}]: " DL; DATA_LOC[$SWVER]=${DL:=${DATA_LOC[$SWVER]}}
-   [ -z "`grep ^mysql: /etc/passwd`" ] && \
-      { read -p "Please input OS account MYSQL password [${PASSWORD}]: " -s MPW; MYSQL_PW=${MPW:=${PASSWORD}}; echo; }
-   read -p "Please input database user ROOT password [${PASSWORD}]: " -s SP; ROOT_PW=${SP:=${PASSWORD}}; echo
-}
 
 VarCheck() {
    echo -e "\nPre-check OS environment and input value..."
@@ -102,8 +101,22 @@ VarCheck() {
          done
       }
    }
-   
+   #--Checki if script is run directly with explicit instance name, treat as single-instance install and remove group replication settings from initfile_84.cnf.
+   if [ "$#" -eq 1 ] && [ "${AUTO_INSTALL_FROM_REMOTE:-0}" != "1" ]; then
+      CONFIG_ROOT="/opt/software/mysql_installer"
+      TARGET_CNF="${CONFIG_ROOT}/initfile_${SWVER}.cnf"
+      TEMPLATE_CNF="${CONFIG_ROOT}/initfile_${SWVER}_template.cnf"
 
+      echo -e "\n[$(hostname)]Direct mode detected, preparing single-instance CNF..."
+      if [ -f "${TEMPLATE_CNF}" ]; then
+         sed -e '/^[[:space:]]*loose-group/d' -e '/^[[:space:]]*#/d' "${TEMPLATE_CNF}" > "${TARGET_CNF}"
+      elif [ -f "${TARGET_CNF}" ]; then
+         sed -i '/^[[:space:]]*loose-group/d' "${TARGET_CNF}"
+      else
+         echo -e "[Error] - [$(hostname)]Can't find ${TARGET_CNF} or ${TEMPLATE_CNF}."
+         exit 1
+      fi
+   fi
    #--Create logfile directory --#
    mkdir -p ${PWD}/log
 }
@@ -285,7 +298,7 @@ PostAction() {
 
    echo -e "#--- Reset root passwrd and add OS authentication ---#"
    mysql --skip-password -uroot --force -t <<EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '$NEWPWD';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_PW';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 INSTALL PLUGIN auth_socket SONAME 'auth_socket.so';
@@ -339,7 +352,8 @@ CleanUp() {
 # main()
 PreCheck
 #IntActIn
-VarCheck
+#VarCheck
+VarCheck "$@"
 
 #--- create lock file ---#
 echo ${SWVER} ${MYSQL_HOME[$SWVER]} ${INST_NAME} $$ >>${LCKFILE}
